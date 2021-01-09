@@ -1,5 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -7,100 +8,114 @@ using System.Threading.Tasks;
 
 namespace AsyncServer
 {
-    public class Client : IDisposable
-    {
-        private TcpClient TcpClient { get; set; }
+    public class Client
+    {        
         private Guid Guid { get; set; }
 
-        private CancellationToken CancellationToken { get; set; }
+        private int Port { get; set; }
+        private string Ip { get; set; }      
 
-        private ClientConnection Connection { get; set; }
+        private CancellationToken CancellationToken { get; set; }    
 
         private string _messageCaption = "hello|";
 
         public Client(string ip, int port, Guid guid, CancellationToken cancellationToken)
         {
             CancellationToken = cancellationToken;
-
-            TcpClient = new TcpClient();
-            TcpClient.Connect(ip, port);
-
-            Connection = new ClientConnection(TcpClient);
+            Ip = ip;
+            Port = port;
+           
 
             Guid = guid;
         }
 
         public async Task Ping()
         {
+            using var client = new TcpClient();
+            client.Connect(Ip, Port);
+            var connection = new ClientConnection(client);
+
             var commandData = "ping";
-            var commandLength = commandData.Length;
+            var commandLength = commandData.Length+1;
 
-            await WriteHeader();
-            await WriteCommandCode(CommandCodeEn.Ping);
-            await WriteGuid();            
-            await WriteDataLength(commandLength);
-            await WriteString(commandData);
+            await WriteHeader(connection);
+            await WriteCommandCode(connection, CommandCodeEn.Ping);
+            await WriteGuid(connection);
+            await WriteDataLength(connection, commandLength);
+            await WriteString(connection, commandData);
 
-            var caption = await Connection.ReadStringAsync(_messageCaption.Length, CancellationToken);
-            var pong = await Connection.ReadStringAsync("pong".Length, CancellationToken);
+            var caption = await connection.ReadStringAsync(CancellationToken);
+            var pong = await connection.ReadStringAsync(CancellationToken);
 
             Console.WriteLine($"<- {caption}{pong}");
         }
 
-        public async Task GetDate()
+        public async Task<DateTimeOffset> GetDate()
         {
-            await WriteHeader();
-            await WriteCommandCode(CommandCodeEn.GetDate);
-            await WriteGuid();
-            await WriteDataLength(0);
+            using var client = new TcpClient();
+            client.Connect(Ip, Port);
+            var connection = new ClientConnection(client);
+
+            await WriteHeader(connection);
+            await WriteCommandCode(connection, CommandCodeEn.GetDate);
+            await WriteGuid(connection);
+            await WriteDataLength(connection, 0);
           
-            var caption = await Connection.ReadStringAsync(_messageCaption.Length, CancellationToken);
-            var unixDate = await Connection.ReadInt64Async(CancellationToken);
+            var caption = await connection.ReadStringAsync(CancellationToken);
+            var unixDate = await connection.ReadInt64Async(CancellationToken);
 
             var date = DateTimeOffset.FromUnixTimeSeconds(unixDate);
 
             Console.WriteLine($"<- {caption}{date}");
+
+            return date;
         }
 
-        public void Dispose()
+        public async Task UploadFile(string filePath)
+        {
+            using var client = new TcpClient();
+            client.Connect(Ip, Port);
+            var connection = new ClientConnection(client);
+
+            var fileName = filePath.Split('\\').Last();
+            var fileBytes = await File.ReadAllBytesAsync(filePath);
+
+            await WriteHeader(connection);
+            await WriteCommandCode(connection, CommandCodeEn.PutFile);
+            await WriteGuid(connection);
+            await WriteDataLength(connection, fileBytes.Length+fileName.Length+1);
+            await connection.WriteStringAsync(fileName, CancellationToken);
+            await connection.WriteBytesAsync(fileBytes, CancellationToken);
+
+            var caption = await connection.ReadStringAsync(CancellationToken);
+            var savedFileName = await connection.ReadStringAsync(CancellationToken);
+            Console.WriteLine($"<- {caption}{savedFileName}");
+        }
+
+        private async Task WriteHeader(ClientConnection connection)
         {            
-            TcpClient?.Close();
+            await connection.WriteStringAsync(_messageCaption, CancellationToken);
         }
 
-        private async Task WriteHeader()
-        {
-            var bytes= Encoding.UTF8.GetBytes(_messageCaption);
-            await Connection.WriteBytesAsync(bytes, CancellationToken);
-        }
-
-        private async Task WriteCommandCode(CommandCodeEn commandCode)
+        private async Task WriteCommandCode(ClientConnection connection, CommandCodeEn commandCode)
         {           
-            await Connection.WriteByteAsync((byte)commandCode, CancellationToken);
+            await connection.WriteByteAsync((byte)commandCode, CancellationToken);
         }
 
-        private async Task WriteGuid()
+        private async Task WriteGuid(ClientConnection connection)
+        {           
+            await connection.WriteStringAsync(Guid.ToString(), CancellationToken);
+        }
+
+        private async Task WriteDataLength(ClientConnection connection, int dataLength)
         {
-            var bytes = Encoding.UTF8.GetBytes(Guid.ToString());
-            await Connection.WriteBytesAsync(bytes, CancellationToken);
+            await connection.WriteInt32Async(dataLength, CancellationToken);
         }
 
-        private async Task WriteDataLength(int dataLength)
+        private async Task WriteString(ClientConnection connection, string data)
         {
-            await Connection.WriteInt32Async(dataLength, CancellationToken);
+            await connection.WriteStringAsync(data, CancellationToken);
         }
 
-        private async Task WriteString(string data)
-        {
-            await Connection.WriteStringAsync(data, CancellationToken);
-        }
-
-        private byte[] Append(byte[] buffer, byte[] data)
-        {
-            var newBuffer = new byte[buffer.Length + data.Length];
-            Array.Copy(buffer, 0, newBuffer, 0, buffer.Length);
-            Array.Copy(data, 0, newBuffer, buffer.Length, data.Length);
-
-            return newBuffer;
-        }
     }
 }

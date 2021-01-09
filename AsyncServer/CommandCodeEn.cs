@@ -7,6 +7,7 @@ namespace AsyncServer
     public enum CommandCodeEn : byte
     {
         Ping =0,
-        GetDate = 1
+        GetDate = 1,
+        PutFile = 2
     }
 }

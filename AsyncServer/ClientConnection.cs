@@ -62,14 +62,26 @@ namespace AsyncServer
             await WriteBytesAsync(bytes, token);
         }
 
-        public async Task<string> ReadStringAsync(int stringLength, CancellationToken token)
+        //public async Task<string> ReadStringAsync(int stringLength, CancellationToken token)
+        //{
+        //    return GetString(await ReadBytesAsync(stringLength, token));
+        //}
+
+        public async Task<string> ReadStringAsync(CancellationToken token)
         {
-            return GetString(await ReadBytesAsync(stringLength, token));
+            var sb = new StringBuilder();
+            char chr;
+            while ((chr = (char)await ReadByteAsync(token)) != '\0')
+            {
+                sb.Append(chr);
+            }
+
+            return sb.ToString();
         }
 
         public async Task WriteStringAsync(string str, CancellationToken token)
         {
-            var bytes = GetBytes(str);
+            var bytes = GetBytes(str+'\0');
             await WriteBytesAsync(bytes, token);
         }
 
@@ -99,6 +111,7 @@ namespace AsyncServer
                 Array.Copy(data, 0, result, totalReaded, readed);
                 totalReaded += readed;
             }
+            _offset += totalReaded;
 
             return result;
         }

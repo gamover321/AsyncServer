@@ -11,7 +11,7 @@ namespace AsyncServer.CommandHandlers
     {
         protected override async Task ProcessRequest(ClientConnection connection, CancellationToken cancellationToken)
         {
-            var ping = await Connection.ReadStringAsync("ping".Length, cancellationToken);           
+            var ping = await Connection.ReadStringAsync(cancellationToken);           
 
             Console.WriteLine($"[{Guid}] -> {ping} ({DataLength})");         
             await connection.WriteStringAsync("pong", cancellationToken);

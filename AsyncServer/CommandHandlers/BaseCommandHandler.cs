@@ -18,7 +18,7 @@ namespace AsyncServer.CommandHandlers
         {
             Connection = new ClientConnection(client);
 
-            var stringGuid = await Connection.ReadStringAsync(Guid.NewGuid().ToString().Length, cancellationToken);
+            var stringGuid = await Connection.ReadStringAsync(cancellationToken);
             Guid = new Guid(stringGuid);
             DataLength = await Connection.ReadInt32Async(cancellationToken);
 

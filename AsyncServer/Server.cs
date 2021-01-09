@@ -52,9 +52,13 @@ namespace AsyncServer
                 cts.CancelAfter((int)ReadTimeOut.TotalMilliseconds);
                 var token = cts.Token;
 
+                //var buffer = new byte[256];
+                //client.GetStream().Read(buffer, 0, buffer.Length);
+                //return;
+
                 var connection = new ClientConnection(client);
 
-                var caption = await connection.ReadStringAsync(MessageCaption.Length, token);
+                var caption = await connection.ReadStringAsync(token);
                 if (caption != MessageCaption)
                 {
                     Console.WriteLine("Wrong request");
@@ -74,6 +78,11 @@ namespace AsyncServer
                     var handler = new GetDateCommandHandler();
                     await handler.ProcessRequestAsync(client, token);
                 }
+                else if (commandCode == CommandCodeEn.PutFile)
+                {
+                    var handler = new SaveFileCommandHandler();
+                    await handler.ProcessRequestAsync(client, token);
+                }
                 else
                 {
                     throw new Exception($"Invalid command code: {commandCode}");
@@ -85,10 +94,7 @@ namespace AsyncServer
             catch (Exception ex)
             {
                 Console.WriteLine(ex);
-            }         
-            
+            }                
         }  
-
-
     }
 }
